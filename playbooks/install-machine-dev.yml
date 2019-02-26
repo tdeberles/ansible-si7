@@ -35,3 +35,135 @@
         name: php7.2        
         state: present
 
+- name: Installation de Mysql   
+  hosts: all  
+  tasks:
+     - name: Installation python-pip       
+       apt:        
+        name: python-pip        
+        state: present
+     - name: Installer le module Python pour Mysql      
+       pip:        
+         name: PyMySQL
+         state: present
+     - name: Installation python-mysqldb       
+       apt:        
+        name: python-mysqldb        
+        state: present
+     - name: Installation mysql-server      
+       apt:        
+        name: mysql-server        
+        state: present
+        
+     - name: Gestion du my.cnf      
+       copy:        
+         src: /root/autres/my.cnf.j2        
+         dest: /root/.my.cnf         
+         owner: root        
+         group: root        
+         mode: 0600
+         
+     - name: Redémarrer le service mysql      
+       service:        
+        name: mysql        
+        state: restarted
+     
+     - name: Gestion du mot de passe du root
+       mysql_user:
+         name: root
+         password: btsinfo
+         login_unix_socket: /var/run/mysqld/mysqld.sock
+     
+     - name: Création d'une base de données
+       mysql_db:
+           name: "{{mysql_db}}"
+           state: present
+           login_unix_socket: /var/run/mysqld/mysqld.sock
+     
+     - name: Création de l'utilisateur eleve et affectation des privilèges sur une base de données     
+       mysql_user:
+             name: "{{mysql_user}}"        
+             password: "{{mysql_password}}"        
+             host: localhost        
+             priv: "{{mysql_db}}.*:ALL,GRANT"        
+             login_unix_socket: /var/run/mysqld/mysqld.sock
+- name: PHPMYADMIN Installation
+  hosts: all
+  tasks:
+     - name: Installation debconf-utils      
+       apt:        
+        name: debconf-utils        
+        state: present
+     
+     - name: Installation de dbconfig
+       debconf:
+        name: phpmyadmin
+        question: phpmyadmin/dbconfig-install
+        value: true
+        vtype: boolean
+       
+     - name: Confirmation mdp   
+       debconf: 
+        name: phpmyadmin
+        question: phpmyadmin/app-password-confirm
+        value: btsinfo
+        vtype: password
+     
+     - name: Mettre le mdp admin
+       debconf: 
+        name: phpmyadmin
+        question: phpmyadmin/mysql/admin-pass
+        value: btsinfo
+        vtype: password
+       
+     - name: Mettre mdp dans phpmyadmin  
+       debconf: 
+        name: phpmyadmin
+        question: phpmyadmin/mysql/app-pass
+        value: btsinfo
+        vtype: password
+      
+     - name: Quel serveur reconfigurer
+       debconf: 
+        name: phpmyadmin
+        question: phpmyadmin/reconfigure-webserver
+        value: apache2
+        vtype: multiselect
+        
+     - name: Installation PhpMyAdmin      
+       apt:        
+        name: phpmyadmin        
+        state: present
+        
+- name: Gestion des erreurs
+  hosts: all
+  tasks:
+      - name: Suppression index.html
+        file:
+            path: /var/www/html/index.html
+            state: absent
+            
+      - name: copy du index.html      
+        copy:        
+         src: /root/index.php        
+         dest: /var/www/html         
+         owner: www-data        
+         group: www-data        
+         mode: 0755
+         
+      - name: Activation de l'affichage des erreurs display_erros
+        lineinfile: 
+            dest: /etc/php/7.2/apache2/php.ini
+            regexp: '^display_errors = Off'
+            line: 'display_errors = On'
+            
+      - name: Activation de l'affichage des erreurs display_erros
+        lineinfile: 
+            dest: /etc/php/7.2/apache2/php.ini
+            regexp: '^display_startup_errors = Off'
+            line: 'display_startup_errors = On'
+            
+      - name: Redémarrer le service apache2     
+        service:        
+            name: apache2        
+            state: restarted
